@@ -10,8 +10,8 @@ It builds a sphere around the viewer using **OpenGL ES** and maps the video fram
 
 ## What It Does
 
-- Plays 360-degree videos.
-- Lets you explore videos by touching the screen.
+- Plays a 360-degree video.
+- Lets you explore the video by touching the screen.
 - Uses OpenGL ES for smooth video display.
 
 ## How to See It
