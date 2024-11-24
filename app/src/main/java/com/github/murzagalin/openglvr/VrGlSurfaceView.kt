@@ -13,7 +13,7 @@ class VrGlSurfaceView(context: Context, attrs: AttributeSet?) : GLSurfaceView(co
     companion object {
         private const val TAG = "VrGlSurfaceView"
         private const val TOUCH_SCALE_FACTOR = 180.0f / 320 / 3.8f
-        private const val SPHERE_VIEW_SCREEN_RATIO = 1f - 1f / 5f
+        private const val SPHERE_VIEW_SCREEN_RATIO = 1f - SphereRenderer.RECT_VIEW_SCREEN_PERCENTAGE / 100f
     }
 
     private val renderer: SphereRenderer
@@ -38,7 +38,7 @@ class VrGlSurfaceView(context: Context, attrs: AttributeSet?) : GLSurfaceView(co
             Log.e(TAG, e.message, e)
         }
 
-        renderer = SphereRenderer(context, mediaPlayer)
+        renderer = SphereRenderer(mediaPlayer)
         setRenderer(renderer)
     }
 
@@ -70,9 +70,8 @@ class VrGlSurfaceView(context: Context, attrs: AttributeSet?) : GLSurfaceView(co
             MotionEvent.ACTION_DOWN -> //here is only rectangular part of screen available
                 if (y >= renderer.screenHeight * SPHERE_VIEW_SCREEN_RATIO) {
                     renderer.angleX = -x / renderer.screenWidth.toFloat() * 360 - 90
-
                     val relativeYCoordinate = y - renderer.screenHeight * SPHERE_VIEW_SCREEN_RATIO
-                    renderer.angleY = 90 - (180f / (renderer.screenHeight / 5f)) * relativeYCoordinate
+                    renderer.angleY = 90 - relativeYCoordinate * SphereRenderer.RECT_SCREEN_SPLIT * 180f / renderer.screenHeight
                     requestRender()
                 }
         }

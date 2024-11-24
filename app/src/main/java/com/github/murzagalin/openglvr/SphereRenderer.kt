@@ -1,13 +1,11 @@
 package com.github.murzagalin.openglvr
 
-import android.content.Context
 import android.graphics.SurfaceTexture
 import android.graphics.SurfaceTexture.OnFrameAvailableListener
 import android.media.MediaPlayer
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.opengl.Matrix
-import android.util.Log
 import android.view.Surface
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -18,22 +16,35 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 
-class SphereRenderer(private val context: Context, private var mediaPlayer: MediaPlayer) :
+class SphereRenderer(private var mediaPlayer: MediaPlayer) :
     GLSurfaceView.Renderer, OnFrameAvailableListener {
+
     private val vertexShaderCode =
         """
-        attribute vec4 vPosition;attribute vec4 a_TexCoordinate;uniform mat4 u_Matrix;uniform mat4 uSTMatrix;varying vec2 v_TexCoordinate; void main() {  gl_Position = u_Matrix * vPosition;  v_TexCoordinate = (uSTMatrix * a_TexCoordinate).xy;
+        attribute vec4 vPosition;
+        attribute vec4 a_TexCoordinate;
+        uniform mat4 u_Matrix;
+        uniform mat4 uSTMatrix;
+        varying vec2 v_TexCoordinate; 
+        
+        void main() {  
+            gl_Position = u_Matrix * vPosition;  
+            v_TexCoordinate = (uSTMatrix * a_TexCoordinate).xy;
         }
         """.trimIndent()
 
     private val fragmentShaderCode = """
         #extension GL_OES_EGL_image_external : require
         precision mediump float;uniform samplerExternalOES sTexture;
-        varying vec2 v_TexCoordinate;void main() {  gl_FragColor =  texture2D(sTexture, v_TexCoordinate);}
+        varying vec2 v_TexCoordinate;
+        
+        void main() {  
+            gl_FragColor =  texture2D(sTexture, v_TexCoordinate);
+        }
         """.trimIndent()
 
 
-    private var mSurface: SurfaceTexture? = null
+    private lateinit var surface: SurfaceTexture
     private var updateSurface = false
 
     private var left = 0f
@@ -41,66 +52,68 @@ class SphereRenderer(private val context: Context, private var mediaPlayer: Medi
     private var bottom = 0f
     private var top = 0f
 
-    private var mHandleMatrix = 0
+    private var handleMatrix = 0
 
-    private val mProjectionMatrix = FloatArray(16)
-    private val mViewMatrix = FloatArray(16)
-    private val mProjectionViewMatrix = FloatArray(16)
+    private val projectionMatrix = FloatArray(16)
+    private val viewMatrix = FloatArray(16)
+    private val projectionViewMatrix = FloatArray(16)
 
-    private val mRotationMatrixX = FloatArray(16)
-    private val mRotationMatrixY = FloatArray(16)
-    private val mRotationMatrix = FloatArray(16)
-    private val mScrtch = FloatArray(16)
-    private val mSTMatrix = FloatArray(16)
+    private val rotationMatrixX = FloatArray(16)
+    private val rotationMatrixY = FloatArray(16)
+    private val rotationMatrix = FloatArray(16)
+    private val scrtch = FloatArray(16)
+    private val STMatrix = FloatArray(16)
 
 
-    private val mTettaSteps = 10
-    private val mPhiSteps = 18
+    // How many steps are on the sphere for angles tetta and phi (in spherical coordinates)
+    private val tettaSteps = 10
+    private val phiSteps = 18
 
-    private val mSphereCoords = FloatArray(((mPhiSteps + 1) * (2 * (mTettaSteps + 1) - 2)) * 3)
+    // radius in spherical coordinates
+    private val r = 5f
 
-    private val mR = 5f
+    private val sphereCoords = FloatArray((phiSteps + 1) * (2 * (tettaSteps + 1) - 2) * 3)
 
-    val sphereTextureCoordinateData: FloatArray =
-        FloatArray(((mPhiSteps + 1) * (2 * (mTettaSteps + 1) - 2)) * 2)
+    private val sphereTextureCoordinateData: FloatArray =
+        FloatArray(((phiSteps + 1) * (2 * (tettaSteps + 1) - 2)) * 2)
 
-    var mRectangleTexCoords: FloatArray = floatArrayOf(
+    private var rectangleTexCoords: FloatArray = floatArrayOf(
         0f, 0f,
         0f, 1f,
         1f, 0f,
         1f, 1f
     )
 
-    var mRectangleCoords: FloatArray = FloatArray(12)
+    private var rectangleCoords: FloatArray = FloatArray(12)
 
-    private var mPositionHandle = 0
-    private var mTextureID = 0
-    private var muSTMatrixHandle = 0
+    private var positionHandle = 0
+    private var textureID = 0
+    private var STMatrixHandle = 0
 
     private val COORDS_PER_VERTEX = 3
 
     private var vertexCount = 0
-    private var vertexStride = 0 // 4 bytes per vertex
+    private var vertexStride = COORDS_PER_VERTEX * 4 // 4 bytes per vertex
 
-    private var mProgram = 0
+    private var program = 0
 
-    private lateinit var mVertexBuffer: FloatBuffer
+    private lateinit var vertexBuffer: FloatBuffer
 
-    private lateinit var mRectangleTextureCoordinates: FloatBuffer
-    private lateinit var mRectangleVertexBuffer: FloatBuffer
+    private lateinit var rectangleTextureCoordinates: FloatBuffer
+    private lateinit var rectangleVertexBuffer: FloatBuffer
 
 
     /** Store our model data in a float buffer.  */
-    private lateinit var mSphereTextureCoordinates: FloatBuffer
+    private lateinit var sphereTextureCoordinates: FloatBuffer
 
     /** This will be used to pass in the texture.  */
-    private var mTextureUniformHandle = 0
+    private var textureUniformHandle = 0
 
     /** This will be used to pass in model texture coordinate information.  */
-    private var mTextureCoordinateHandle = 0
+    private var textureCoordinateHandle = 0
 
     /** Size of the texture coordinate data in elements.  */
-    private val mTextureCoordinateDataSize = 2
+    private val textureCoordinateDataSize = 2
 
     var angleX: Float = 0f
     var angleY: Float = 0f
@@ -129,58 +142,61 @@ class SphereRenderer(private val context: Context, private var mediaPlayer: Medi
         makeProgram()
 
         // get handle to vertex shader's vPosition member
-        mPositionHandle = GLES20.glGetAttribLocation(mProgram, "vPosition")
-        mHandleMatrix = GLES20.glGetUniformLocation(mProgram, "u_Matrix")
+        positionHandle = GLES20.glGetAttribLocation(program, "vPosition")
+        handleMatrix = GLES20.glGetUniformLocation(program, "u_Matrix")
 
-        mTextureUniformHandle = GLES20.glGetUniformLocation(mProgram, "u_Texture")
-        mTextureCoordinateHandle = GLES20.glGetAttribLocation(mProgram, "a_TexCoordinate")
+        textureUniformHandle = GLES20.glGetUniformLocation(program, "u_Texture")
+        textureCoordinateHandle = GLES20.glGetAttribLocation(program, "a_TexCoordinate")
 
-        muSTMatrixHandle = GLES20.glGetUniformLocation(mProgram, "uSTMatrix")
+        STMatrixHandle = GLES20.glGetUniformLocation(program, "uSTMatrix")
 
-        GLES20.glEnableVertexAttribArray(mTextureCoordinateHandle)
+        GLES20.glEnableVertexAttribArray(textureCoordinateHandle)
         // Enable a handle to the triangle vertices
-        GLES20.glEnableVertexAttribArray(mPositionHandle)
+        GLES20.glEnableVertexAttribArray(positionHandle)
 
 
         // Tell the texture uniform sampler to use this texture in the shader by binding to texture unit 0.
-        GLES20.glUniform1i(mTextureUniformHandle, 0)
+        GLES20.glUniform1i(textureUniformHandle, 0)
 
-        mSphereTextureCoordinates!!.position(0)
+        sphereTextureCoordinates.position(0)
         GLES20.glVertexAttribPointer(
-            mTextureCoordinateHandle, mTextureCoordinateDataSize, GLES20.GL_FLOAT, false,
-            0, mSphereTextureCoordinates
+            textureCoordinateHandle,
+            textureCoordinateDataSize,
+            GLES20.GL_FLOAT,
+            false,
+            0,
+            sphereTextureCoordinates
         )
 
-        Matrix.setIdentityM(mSTMatrix, 0)
+        Matrix.setIdentityM(STMatrix, 0)
 
         val textures = IntArray(1)
         GLES20.glGenTextures(1, textures, 0)
 
-        mTextureID = textures[0]
+        textureID = textures[0]
 
         GLES20.glTexParameterf(
-            GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MIN_FILTER,
+            GL_TEXTURE_EXTERNAL_OES,
+            GLES20.GL_TEXTURE_MIN_FILTER,
             GLES20.GL_NEAREST.toFloat()
         )
         GLES20.glTexParameterf(
-            GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MAG_FILTER,
+            GL_TEXTURE_EXTERNAL_OES,
+            GLES20.GL_TEXTURE_MAG_FILTER,
             GLES20.GL_LINEAR.toFloat()
         )
-
 
         /*
         * Create the SurfaceTexture that will feed this textureID,
         * and pass it to the MediaPlayer
         */
-        mSurface = SurfaceTexture(mTextureID)
-        mSurface!!.setOnFrameAvailableListener(this)
+        surface = SurfaceTexture(textureID)
+        surface.setOnFrameAvailableListener(this)
 
-        val surface = Surface(mSurface)
+        val surface = Surface(surface)
         mediaPlayer.setSurface(surface)
         mediaPlayer.setScreenOnWhilePlaying(true)
         surface.release()
-
-
 
         synchronized(this) {
             updateSurface = false
@@ -196,13 +212,13 @@ class SphereRenderer(private val context: Context, private var mediaPlayer: Medi
 
         synchronized(this) {
             if (updateSurface) {
-                mSurface!!.updateTexImage()
-                mSurface!!.getTransformMatrix(mSTMatrix)
+                surface.updateTexImage()
+                surface.getTransformMatrix(STMatrix)
                 updateSurface = false
             }
         }
 
-        GLES20.glUniformMatrix4fv(muSTMatrixHandle, 1, false, mSTMatrix, 0)
+        GLES20.glUniformMatrix4fv(STMatrixHandle, 1, false, STMatrix, 0)
 
         drawSphere()
         drawRectangle()
@@ -211,30 +227,32 @@ class SphereRenderer(private val context: Context, private var mediaPlayer: Medi
     private fun drawSphere() {
         //sphere
         GLES20.glVertexAttribPointer(
-            mTextureCoordinateHandle, mTextureCoordinateDataSize, GLES20.GL_FLOAT, false,
-            0, mSphereTextureCoordinates
+            textureCoordinateHandle,
+            textureCoordinateDataSize,
+            GLES20.GL_FLOAT,
+            false,
+            0,
+            sphereTextureCoordinates
         )
 
         GLES20.glVertexAttribPointer(
-            mPositionHandle, COORDS_PER_VERTEX,
-            GLES20.GL_FLOAT, false,
-            vertexStride, mVertexBuffer
+            positionHandle,
+            COORDS_PER_VERTEX,
+            GLES20.GL_FLOAT,
+            false,
+            vertexStride,
+            vertexBuffer
         )
 
-        Matrix.frustumM(mProjectionMatrix, 0, left, right, bottom, top, 1.2f, 5.0f)
+        Matrix.frustumM(projectionMatrix, 0, left, right, bottom, top, 1.2f, 5.0f)
+        Matrix.setLookAtM(viewMatrix, 0, 0f, 0f, 0f, 0f, 0f, -1f, 0f, 1f, 0f)
+        Matrix.multiplyMM(projectionViewMatrix, 0, projectionMatrix, 0, viewMatrix, 0)
+        Matrix.setRotateM(rotationMatrixX, 0, angleY, -1.0f, 0.0f, 0f)
+        Matrix.setRotateM(rotationMatrixY, 0, angleX, 0.0f, -1.0f, 0f)
+        Matrix.multiplyMM(rotationMatrix, 0, rotationMatrixX, 0, rotationMatrixY, 0)
+        Matrix.multiplyMM(scrtch, 0, projectionViewMatrix, 0, rotationMatrix, 0)
 
-        Matrix.setLookAtM(mViewMatrix, 0, 0f, 0f, 0f, 0f, 0f, -1f, 0f, 1f, 0f)
-
-        Matrix.multiplyMM(mProjectionViewMatrix, 0, mProjectionMatrix, 0, mViewMatrix, 0)
-
-        Matrix.setRotateM(mRotationMatrixX, 0, angleY, -1.0f, 0.0f, 0f)
-        Matrix.setRotateM(mRotationMatrixY, 0, angleX, 0.0f, -1.0f, 0f)
-
-        Matrix.multiplyMM(mRotationMatrix, 0, mRotationMatrixX, 0, mRotationMatrixY, 0)
-
-        Matrix.multiplyMM(mScrtch, 0, mProjectionViewMatrix, 0, mRotationMatrix, 0)
-
-        GLES20.glUniformMatrix4fv(mHandleMatrix, 1, false, mScrtch, 0)
+        GLES20.glUniformMatrix4fv(handleMatrix, 1, false, scrtch, 0)
 
         // Draw the sphere
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, vertexCount)
@@ -243,21 +261,28 @@ class SphereRenderer(private val context: Context, private var mediaPlayer: Medi
     private fun drawRectangle() {
         //rectangle
         //projection matrixes for rectangle
-        Matrix.orthoM(mProjectionMatrix, 0, left, right, bottom, top, 0.0f, 5.0f)
-        Matrix.setLookAtM(mViewMatrix, 0, 0f, 0f, 0f, 0f, 0f, -1f, 0f, 1f, 0f)
-        Matrix.multiplyMM(mProjectionViewMatrix, 0, mProjectionMatrix, 0, mViewMatrix, 0)
+        Matrix.orthoM(projectionMatrix, 0, left, right, bottom, top, 0.0f, 5.0f)
+        Matrix.setLookAtM(viewMatrix, 0, 0f, 0f, 0f, 0f, 0f, -1f, 0f, 1f, 0f)
+        Matrix.multiplyMM(projectionViewMatrix, 0, projectionMatrix, 0, viewMatrix, 0)
 
         GLES20.glVertexAttribPointer(
-            mTextureCoordinateHandle, mTextureCoordinateDataSize, GLES20.GL_FLOAT, false,
-            0, mRectangleTextureCoordinates
+            textureCoordinateHandle,
+            textureCoordinateDataSize,
+            GLES20.GL_FLOAT,
+            false,
+            0,
+            rectangleTextureCoordinates
         )
 
-        GLES20.glUniformMatrix4fv(mHandleMatrix, 1, false, mProjectionViewMatrix, 0)
+        GLES20.glUniformMatrix4fv(handleMatrix, 1, false, projectionViewMatrix, 0)
 
         GLES20.glVertexAttribPointer(
-            mPositionHandle, COORDS_PER_VERTEX,
-            GLES20.GL_FLOAT, false,
-            vertexStride, mRectangleVertexBuffer
+            positionHandle,
+            COORDS_PER_VERTEX,
+            GLES20.GL_FLOAT,
+            false,
+            vertexStride,
+            rectangleVertexBuffer
         )
 
         //draw the rectangle
@@ -310,70 +335,70 @@ class SphereRenderer(private val context: Context, private var mediaPlayer: Medi
         )
 
         // create empty OpenGL ES Program
-        mProgram = GLES20.glCreateProgram()
+        program = GLES20.glCreateProgram()
 
         // add the vertex shader to program
-        GLES20.glAttachShader(mProgram, vertexShader)
+        GLES20.glAttachShader(program, vertexShader)
 
         // add the fragment shader to program
-        GLES20.glAttachShader(mProgram, fragmentShader)
+        GLES20.glAttachShader(program, fragmentShader)
 
         // creates OpenGL ES program executables
-        GLES20.glLinkProgram(mProgram)
+        GLES20.glLinkProgram(program)
 
         // Add program to OpenGL ES environment
-        GLES20.glUseProgram(mProgram)
+        GLES20.glUseProgram(program)
     }
 
     //set the rectangle coordinates and buffers to draw it
     private fun setRectangleCoords() {
-        mRectangleCoords[0] = left
-        mRectangleCoords[1] = bottom
-        mRectangleCoords[2] = -0.0f
-        mRectangleCoords[3] = left
-        mRectangleCoords[4] = bottom + (top - bottom) / 5
-        mRectangleCoords[5] = -0.0f
-        mRectangleCoords[6] = right
-        mRectangleCoords[7] = bottom
-        mRectangleCoords[8] = -0.0f
-        mRectangleCoords[9] = right
-        mRectangleCoords[10] = bottom + (top - bottom) / 5
-        mRectangleCoords[11] = -0.0f
+        rectangleCoords[0] = left
+        rectangleCoords[1] = bottom
+        rectangleCoords[2] = -0.0f
+        rectangleCoords[3] = left
+        rectangleCoords[4] = bottom + (top - bottom) / RECT_SCREEN_SPLIT
+        rectangleCoords[5] = -0.0f
+        rectangleCoords[6] = right
+        rectangleCoords[7] = bottom
+        rectangleCoords[8] = -0.0f
+        rectangleCoords[9] = right
+        rectangleCoords[10] = bottom + (top - bottom) / RECT_SCREEN_SPLIT
+        rectangleCoords[11] = -0.0f
 
         //buffers for rectangle
         // a float has 4 bytes so we allocate for each coordinate 4 bytes
-        val textureByteBuffer = ByteBuffer.allocateDirect(mRectangleTexCoords.size * 4)
+        val textureByteBuffer = ByteBuffer.allocateDirect(rectangleTexCoords.size * 4)
         textureByteBuffer.order(ByteOrder.nativeOrder())
 
         // allocates the memory from the byte buffer
-        mRectangleTextureCoordinates = textureByteBuffer.asFloatBuffer()
+        rectangleTextureCoordinates = textureByteBuffer.asFloatBuffer()
 
         // fill the vertexBuffer with the vertices
-        mRectangleTextureCoordinates.put(mRectangleTexCoords)
+        rectangleTextureCoordinates.put(rectangleTexCoords)
 
         // set the cursor position to the beginning of the buffer
-        mRectangleTextureCoordinates.position(0)
+        rectangleTextureCoordinates.position(0)
 
         // a float has 4 bytes so we allocate for each coordinate 4 bytes
-        val vertexByteBuffer = ByteBuffer.allocateDirect(mRectangleCoords.size * 4)
+        val vertexByteBuffer = ByteBuffer.allocateDirect(rectangleCoords.size * 4)
         vertexByteBuffer.order(ByteOrder.nativeOrder())
 
         // allocates the memory from the byte buffer
-        mRectangleVertexBuffer = vertexByteBuffer.asFloatBuffer()
+        rectangleVertexBuffer = vertexByteBuffer.asFloatBuffer()
 
         // fill the vertexBuffer with the vertices
-        mRectangleVertexBuffer.put(mRectangleCoords)
+        rectangleVertexBuffer.put(rectangleCoords)
 
         // set the cursor position to the beginning of the buffer
-        mRectangleVertexBuffer.position(0)
+        rectangleVertexBuffer.position(0)
     }
 
     /**
      * inits sphere coordinates and buffers to draw this sphere
      */
     private fun initSphereCoords() {
-        val phiStep = 2 * Math.PI / mPhiSteps
-        val tettaStep = Math.PI / mTettaSteps
+        val phiStep = 2 * Math.PI / phiSteps
+        val tettaStep = Math.PI / tettaSteps
 
         var spherePointCounter = 0
         var texturePointCounter = 0
@@ -383,43 +408,38 @@ class SphereRenderer(private val context: Context, private var mediaPlayer: Medi
         while (tetta <= (Math.PI - tettaStep) + tettaStep / 2) {
             var phi = 0.0
             while (phi <= 2 * Math.PI + phiStep / 2) {
-                mSphereCoords[spherePointCounter++] = (mR * sin(tetta) * cos(phi)).toFloat()
-                mSphereCoords[spherePointCounter++] = (mR * cos(tetta)).toFloat()
-                mSphereCoords[spherePointCounter++] = (mR * sin(tetta) * sin(phi)).toFloat()
+                sphereCoords[spherePointCounter++] = (r * sin(tetta) * cos(phi)).toFloat()
+                sphereCoords[spherePointCounter++] = (r * cos(tetta)).toFloat()
+                sphereCoords[spherePointCounter++] = (r * sin(tetta) * sin(phi)).toFloat()
 
                 sphereTextureCoordinateData[texturePointCounter++] = (phi / (2 * Math.PI)).toFloat()
-                sphereTextureCoordinateData[texturePointCounter++] =
-                    1f - (tetta / (Math.PI)).toFloat()
+                sphereTextureCoordinateData[texturePointCounter++] = 1f - (tetta / (Math.PI)).toFloat()
 
-                mSphereCoords[spherePointCounter++] =
-                    (mR * sin(tetta + tettaStep) * cos(phi)).toFloat()
-                mSphereCoords[spherePointCounter++] = (mR * cos(tetta + tettaStep)).toFloat()
-                mSphereCoords[spherePointCounter++] =
-                    (mR * sin(tetta + tettaStep) * sin(phi)).toFloat()
+                sphereCoords[spherePointCounter++] = (r * sin(tetta + tettaStep) * cos(phi)).toFloat()
+                sphereCoords[spherePointCounter++] = (r * cos(tetta + tettaStep)).toFloat()
+                sphereCoords[spherePointCounter++] = (r * sin(tetta + tettaStep) * sin(phi)).toFloat()
 
                 sphereTextureCoordinateData[texturePointCounter++] = (phi / (2 * Math.PI)).toFloat()
-                sphereTextureCoordinateData[texturePointCounter++] =
-                    1f - ((tetta + tettaStep) / (Math.PI)).toFloat()
+                sphereTextureCoordinateData[texturePointCounter++] = 1f - ((tetta + tettaStep) / (Math.PI)).toFloat()
                 phi += phiStep
             }
             tetta += tettaStep
         }
 
-        vertexCount = mSphereCoords.size / COORDS_PER_VERTEX
-        vertexStride = COORDS_PER_VERTEX * 4 // 4 bytes per vertex
+        vertexCount = sphereCoords.size / COORDS_PER_VERTEX
 
         // a float has 4 bytes so we allocate for each coordinate 4 bytes
-        val vertexByteBuffer = ByteBuffer.allocateDirect(mSphereCoords.size * 4)
+        val vertexByteBuffer = ByteBuffer.allocateDirect(sphereCoords.size * 4)
         vertexByteBuffer.order(ByteOrder.nativeOrder())
 
         // allocates the memory from the byte buffer
-        mVertexBuffer = vertexByteBuffer.asFloatBuffer()
+        vertexBuffer = vertexByteBuffer.asFloatBuffer()
 
         // fill the vertexBuffer with the vertices
-        mVertexBuffer.put(mSphereCoords)
+        vertexBuffer.put(sphereCoords)
 
         // set the cursor position to the beginning of the buffer
-        mVertexBuffer.position(0)
+        vertexBuffer.position(0)
 
 
         // a float has 4 bytes so we allocate for each coordinate 4 bytes
@@ -427,38 +447,32 @@ class SphereRenderer(private val context: Context, private var mediaPlayer: Medi
         textureByteBuffer.order(ByteOrder.nativeOrder())
 
         // allocates the memory from the byte buffer
-        mSphereTextureCoordinates = textureByteBuffer.asFloatBuffer()
+        sphereTextureCoordinates = textureByteBuffer.asFloatBuffer()
 
         // fill the vertexBuffer with the vertices
-        mSphereTextureCoordinates.put(sphereTextureCoordinateData)
+        sphereTextureCoordinates.put(sphereTextureCoordinateData)
 
         // set the cursor position to the beginning of the buffer
-        mSphereTextureCoordinates.position(0)
-    }
-
-    private fun checkGlError(op: String) {
-        var error: Int
-        while ((GLES20.glGetError().also { error = it }) != GLES20.GL_NO_ERROR) {
-            Log.e("error", "$op: glError $error")
-            throw RuntimeException("$op: glError $error")
-        }
+        sphereTextureCoordinates.position(0)
     }
 
     companion object {
         private const val GL_TEXTURE_EXTERNAL_OES = 0x8D65
 
+        const val RECT_VIEW_SCREEN_PERCENTAGE = 20
+        const val RECT_SCREEN_SPLIT = 100 / RECT_VIEW_SCREEN_PERCENTAGE
+
 
         fun loadShader(type: Int, shaderCode: String?): Int {
             // create a vertex shader type (GLES20.GL_VERTEX_SHADER)
             // or a fragment shader type (GLES20.GL_FRAGMENT_SHADER)
-
             val shader = GLES20.glCreateShader(type)
 
             // add the source code to the shader and compile it
             GLES20.glShaderSource(shader, shaderCode)
             GLES20.glCompileShader(shader)
 
-            val ErrorLog = GLES20.glGetShaderInfoLog(shader)
+            val errorLog = GLES20.glGetShaderInfoLog(shader)
 
 
             val errorCode = GLES20.glGetError()
