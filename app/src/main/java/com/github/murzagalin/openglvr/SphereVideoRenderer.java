@@ -1,4 +1,4 @@
-package com.iamoem.openglvr;
+package com.github.murzagalin.openglvr;
 
 import android.content.Context;
 import android.graphics.SurfaceTexture;
@@ -9,7 +9,6 @@ import android.opengl.Matrix;
 import android.util.Log;
 import android.view.Surface;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;

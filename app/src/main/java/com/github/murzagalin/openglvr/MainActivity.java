@@ -1,4 +1,4 @@
-package com.iamoem.openglvr;
+package com.github.murzagalin.openglvr;
 
 import android.app.Activity;
 import android.os.Bundle;
