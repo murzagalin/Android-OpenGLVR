@@ -1,5 +1,6 @@
 plugins {
     id 'com.android.application' version '8.7.2'
+    id 'org.jetbrains.kotlin.android' version '1.9.0'
 }
 
 android {
@@ -19,9 +20,13 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
 }
 
 dependencies {
+    implementation 'androidx.core:core-ktx:1.15.0'
     testImplementation 'junit:junit:4.13.2'
-    implementation 'com.android.support:appcompat-v7:23.1.1'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
 }

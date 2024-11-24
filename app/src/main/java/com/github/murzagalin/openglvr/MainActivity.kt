@@ -1,23 +1,23 @@
-package com.github.murzagalin.openglvr;
+package com.github.murzagalin.openglvr
 
-import android.app.Activity;
-import android.os.Bundle;
+import android.app.Activity
+import android.os.Bundle
+import android.view.View
 
-public class MainActivity extends Activity {
 
-    private MyGLSurfaceView myGLSurfaceView;
+class MainActivity : Activity() {
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+    private lateinit var myGLSurfaceView: VrGlSurfaceView
 
-        myGLSurfaceView = (MyGLSurfaceView) findViewById(R.id.glSurfaceView);
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        myGLSurfaceView = findViewById<View>(R.id.glSurfaceView) as VrGlSurfaceView
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-        myGLSurfaceView.onResume();
+    override fun onResume() {
+        super.onResume()
+        myGLSurfaceView.onResume()
     }
 }
