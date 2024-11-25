@@ -16,13 +16,12 @@ It builds a sphere around the viewer using **OpenGL ES** and maps the video fram
 
 ## How to See It
 
-1. Start Android Studio.
-2. Clone the project:
+1. Clone the project:
     ```bash
        git clone https://github.com/murzagalin/Android-OpenGLVR.git
     ```
-3. Open it, sync, and build.
-4. Run it on your phone or emulator.
+2. Open it, sync, and build.
+3. Run it on your phone or emulator.
 
 ## License
 
